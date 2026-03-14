@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-auth-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-firestore-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-storage-compat.min.js"></script>
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyDApzzwdplAqxbzyqGCfQVjN4ywWQddCqo",
@@ -18,9 +19,29 @@ const firebaseConfig = {
   appId: "1:602442675251:web:d0cf84596d888df6d29f46"
 };
 firebase.initializeApp(firebaseConfig);
-const _auth = firebase.auth();
-const _fdb  = firebase.firestore();
-const DOC_REF = _fdb.collection('hris').doc('data');
+const _auth    = firebase.auth();
+const _fdb     = firebase.firestore();
+const _storage = firebase.storage();
+const DOC_REF  = _fdb.collection('hris').doc('data');
+
+// ── Firebase Storage helper ──────────────────────
+// Uploads a file, returns its download URL
+async function uploadToStorage(path, file) {
+  const ref = _storage.ref(path);
+  await ref.put(file);
+  return await ref.getDownloadURL();
+}
+// Uploads a base64 data URL string, returns download URL
+async function uploadBase64ToStorage(path, dataUrl, contentType) {
+  const ref = _storage.ref(path);
+  await ref.putString(dataUrl, 'data_url', { contentType });
+  return await ref.getDownloadURL();
+}
+// Deletes a file from Storage by its full URL (best-effort)
+function deleteFromStorage(url) {
+  if(!url || !url.startsWith('https://')) return;
+  try { _storage.refFromURL(url).delete().catch(()=>{}); } catch(e){}
+}
 </script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -4963,23 +4984,27 @@ function triggerAvatarUpload() {
 function onAvatarUpload(e) {
   const file = e.target.files?.[0];
   if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const photo = ev.target.result;
+  toast('Uploading photo…','ok',2000);
+  const path = SESSION.role==='admin'
+    ? 'photos/admin/profile.jpg'
+    : `photos/employees/${SESSION.empId}.jpg`;
+  uploadToStorage(path, file).then(url => {
     const d = db();
     if(SESSION.role==='admin'){
-      d.adminPhoto = photo;
+      d.adminPhoto = url;
     } else if(SESSION.empId){
       const idx = d.employees.findIndex(x=>x.id===SESSION.empId);
-      if(idx>=0) d.employees[idx].photo=photo;
+      if(idx>=0) d.employees[idx].photo = url;
     }
     save(d);
     updateProfileCard();
     toast('Profile photo updated!','ok');
     logAudit('update', SESSION.role==='admin'?'admin':'employee', SESSION.empId||'admin', `${SESSION.name} updated their profile photo`, null, null);
-  };
-  reader.readAsDataURL(file);
-  e.target.value=''; // reset
+  }).catch(err => {
+    console.error('Photo upload failed', err);
+    toast('Photo upload failed. Try again.','err');
+  });
+  e.target.value='';
 }
 
 function toggleThemeFromCard() {
@@ -7704,20 +7729,19 @@ function lmsLessonRowHtml(l, i) {
 
 function lmsHandleLessonFile(input, i) {
   const file = input.files[0]; if(!file) return;
-  const maxMB = 10;
+  const maxMB = 100;
   if(file.size > maxMB*1024*1024) { toast(`File too large. Max ${maxMB}MB.`,'err'); return; }
-  const reader = new FileReader();
-  reader.onload = e => {
-    byId('lce-lfile-data-'+i).value = e.target.result;
+  toast('Uploading file…','ok',4000);
+  const storePath = `academy/${Date.now()}_${file.name}`;
+  uploadToStorage(storePath, file).then(url => {
+    byId('lce-lfile-data-'+i).value = url;
     byId('lce-lfile-name2-'+i).value = file.name;
     const nameEl = byId('lce-lfile-name-'+i);
     if(nameEl) nameEl.textContent = '📎 '+file.name;
-    // Clear URL if file uploaded
     const urlEl = byId('lce-lurl-'+i);
     if(urlEl && !urlEl.value) urlEl.placeholder = 'URL overrides file if both set';
-    toast('File attached to lesson!','ok');
-  };
-  reader.readAsDataURL(file);
+    toast('File uploaded to cloud!','ok');
+  }).catch(()=>{ toast('File upload failed. Try again.','err'); });
 }
 
 function lmsUpdateLessonType(i) {
@@ -9870,15 +9894,13 @@ async function saveLeaveRequestDraft() {
 async function handleKBUpload(input) {
   const file=input.files[0]; if(!file) return;
   if(file.size>5*1024*1024){toast('File too large. Max 5MB.','err');return;}
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    const catMap={'pdf':'Policy','doc':'Training','docx':'Training','xlsx':'Forms','jpg':'Other','png':'Other','txt':'Memo'};
-    const ext=file.name.split('.').pop().toLowerCase();
-    const suggestCat=catMap[ext]||'Other';
-    const d=db();
-    const empList=(d.employees||[]).filter(ev=>(ev.status||'active')==='active');
-    const empOpts=empList.map(ev=>`<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer"><input type="checkbox" class="kb-emp-chk" value="${ev.id}" style="accent-color:var(--accent)"><span>${ev.name}</span><span style="font-size:10px;color:var(--text3)">${ev.branch}</span></label>`).join('');
-    const defaultTitle=file.name.replace(/\.([^.]+)$/, '');
+  const catMap={'pdf':'Policy','doc':'Training','docx':'Training','xlsx':'Forms','jpg':'Other','png':'Other','txt':'Memo'};
+  const ext=file.name.split('.').pop().toLowerCase();
+  const suggestCat=catMap[ext]||'Other';
+  const d=db();
+  const empList=(d.employees||[]).filter(ev=>(ev.status||'active')==='active');
+  const empOpts=empList.map(ev=>`<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer"><input type="checkbox" class="kb-emp-chk" value="${ev.id}" style="accent-color:var(--accent)"><span>${ev.name}</span><span style="font-size:10px;color:var(--text3)">${ev.branch}</span></label>`).join('');
+  const defaultTitle=file.name.replace(/\.([^.]+)$/, '');
     const uploadHTML=`
       <div style="margin-bottom:12px">
         <label class="form-label">Document Title *</label>
@@ -9914,10 +9936,18 @@ async function handleKBUpload(input) {
     const targetEmps=targetType==='specific'
       ? [...document.querySelectorAll('.kb-emp-chk:checked')].map(x=>x.value)
       : [];
+    toast('Uploading document…','ok',3000);
+    const storePath = `kb/${Date.now()}_${file.name}`;
+    let fileUrl = '';
+    try {
+      fileUrl = await uploadToStorage(storePath, file);
+    } catch(err) {
+      toast('File upload failed. Try again.','err'); input.value=''; return;
+    }
     if(!d.kb) d.kb=[];
     d.kb.push({
       id:'KB'+Date.now(), title:titleVal, cat:suggestCat,
-      filename:file.name, size:file.size, data:e.target.result,
+      filename:file.name, size:file.size, url:fileUrl, storePath,
       uploaded:new Date().toISOString(), uploadedBy:SESSION?.name||'Admin',
       targetType, targetEmps
     });
@@ -9926,8 +9956,6 @@ async function handleKBUpload(input) {
     const visNote=targetType==='all'?'all employees':`${targetEmps.length} employee(s)`;
     toast(`"${titleVal}" uploaded · visible to ${visNote}.`,'ok');
     renderKB();
-  };
-  reader.readAsDataURL(file);
 }
 
 function renderKB() {
@@ -10026,12 +10054,10 @@ function switchKBTab(tab) {
 async function handlePolicyTemplateImport(input) {
   const file = input.files[0]; if(!file) return;
   if(file.size > 5*1024*1024){ toast('File too large. Max 5MB.','err'); return; }
-  const reader = new FileReader();
-  reader.onload = async e => {
-    const typeMap = {'pdf':'HR Policy','doc':'HR Policy','docx':'HR Policy','xlsx':'Compensation','txt':'Other'};
-    const ext = file.name.split('.').pop().toLowerCase();
-    const suggestType = typeMap[ext] || 'Other';
-    const defaultTitle = file.name.replace(/\.([^.]+)$/, '');
+  const typeMap = {'pdf':'HR Policy','doc':'HR Policy','docx':'HR Policy','xlsx':'Compensation','txt':'Other'};
+  const ext = file.name.split('.').pop().toLowerCase();
+  const suggestType = typeMap[ext] || 'Other';
+  const defaultTitle = file.name.replace(/\.([^.]+)$/, '');
     const formHTML = `
       <div style="margin-bottom:12px">
         <label class="form-label">Template Title *</label>
@@ -10069,6 +10095,14 @@ async function handlePolicyTemplateImport(input) {
     if(!ok){ input.value=''; return; }
     const titleVal = (byId('pt-title-input')?.value||'').trim();
     if(!titleVal){ toast('Please enter a template title.','warn'); input.value=''; return; }
+    toast('Uploading template…','ok',3000);
+    const storePath = `policy-templates/${Date.now()}_${file.name}`;
+    let fileUrl = '';
+    try {
+      fileUrl = await uploadToStorage(storePath, file);
+    } catch(err) {
+      toast('File upload failed. Try again.','err'); input.value=''; return;
+    }
     const d = db();
     if(!d.policyTemplates) d.policyTemplates = [];
     d.policyTemplates.push({
@@ -10079,7 +10113,7 @@ async function handlePolicyTemplateImport(input) {
       desc: (byId('pt-desc-input')?.value||'').trim(),
       filename: file.name,
       size: file.size,
-      data: e.target.result,
+      url: fileUrl, storePath,
       imported: new Date().toISOString(),
       importedBy: SESSION?.name || 'Admin'
     });
@@ -10087,8 +10121,6 @@ async function handlePolicyTemplateImport(input) {
     input.value = '';
     toast(`"${titleVal}" saved to Policy Template Library.`,'ok');
     renderPolicyTemplates();
-  };
-  reader.readAsDataURL(file);
 }
 
 let _ptView = 'icon'; // icon | grid | list | compact
@@ -10189,8 +10221,8 @@ function renderPolicyTemplates() {
 function downloadPolicyTemplate(id) {
   const d = db();
   const t = (d.policyTemplates||[]).find(x=>x.id===id);
-  if(!t||!t.data) return;
-  const a = Object.assign(document.createElement('a'),{href:t.data,download:t.filename});
+  if(!t||(!t.url&&!t.data)) return;
+  const a = Object.assign(document.createElement('a'),{href:t.url||t.data,download:t.filename,target:'_blank'});
   a.click();
   toast(`Downloading "${t.title}"…`,'ok');
 }
@@ -10248,8 +10280,10 @@ async function deletePolicyTemplate(id) {
 }
 
 function downloadKBDoc(id) {
-  const d=db(); const doc=d.kb?.find(x=>x.id===id); if(!doc||!doc.data) return;
-  const a=Object.assign(document.createElement('a'),{href:doc.data,download:doc.filename});
+  const d=db(); const doc=d.kb?.find(x=>x.id===id); if(!doc) return;
+  const url = doc.url || doc.data;
+  if(!url) return;
+  const a=Object.assign(document.createElement('a'),{href:url,download:doc.filename,target:'_blank'});
   a.click();
   toast(`Downloading "${doc.title}"…`,'ok');
 }
@@ -11273,22 +11307,22 @@ function triggerEmpPhoto(){
 function handleEmpPhoto(input){
   const file=input.files[0]; if(!file) return;
   if(file.size>2*1024*1024){toast('Image too large (max 2MB).','err');return;}
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    const b64=ev.target.result;
-    // Edit modal
-    const preview=byId('ee-photo-preview');
-    const initials=byId('ee-photo-initials');
-    if(preview){preview.src=b64;preview.style.display='block';}
-    if(initials){initials.style.display='none';}
-    // Store on modal container for saveEditEmp to pick up
+  // Show local preview immediately
+  const localUrl = URL.createObjectURL(file);
+  const preview=byId('ee-photo-preview');
+  const initials=byId('ee-photo-initials');
+  if(preview){preview.src=localUrl;preview.style.display='block';}
+  if(initials){initials.style.display='none';}
+  // Upload to Storage, store URL for saveEditEmp to pick up
+  toast('Uploading photo…','ok',2000);
+  const path = `photos/employees/emp_${Date.now()}.jpg`;
+  uploadToStorage(path, file).then(url => {
     const zone=byId('ee-photo-zone-wrap');
-    if(zone) zone.dataset.pendingPhoto=b64;
-    // Also old zone reference
+    if(zone) zone.dataset.pendingPhoto=url;
     const zone2=byId('emp-photo-zone');
-    if(zone2){zone2.dataset.photo=b64;}
-  };
-  reader.readAsDataURL(file);
+    if(zone2){zone2.dataset.photo=url;}
+    toast('Photo ready.','ok',1500);
+  }).catch(()=>{ toast('Photo upload failed.','err'); });
 }
 
 // ══════════════════════════════════════════════════
@@ -13803,22 +13837,31 @@ async function openNewAnnouncement(editId) {
 
   // Handle media
   let mediaData = existing?.mediaData||null, mediaName=existing?.mediaName||'', mediaType=existing?.mediaType||'';
+  let mediaUrl  = existing?.mediaUrl||null, mediaStorePath=existing?.mediaStorePath||null;
   const mediaFile = byId('ann-media-file')?.files?.[0];
   if(mediaFile) {
-    mediaData = await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(mediaFile);});
-    mediaName = mediaFile.name; mediaType = mediaFile.type;
+    toast('Uploading media…','ok',3000);
+    try {
+      mediaStorePath = `announcements/${Date.now()}_${mediaFile.name}`;
+      mediaUrl  = await uploadToStorage(mediaStorePath, mediaFile);
+      mediaName = mediaFile.name;
+      mediaType = mediaFile.type;
+      mediaData = null; // no longer storing base64
+    } catch(err) {
+      toast('Media upload failed. Try again.','err'); return;
+    }
   }
 
   const d2 = db();
   if(!d2.announcements) d2.announcements=[];
   if(editId) {
     const idx = d2.announcements.findIndex(a=>a.id===editId);
-    if(idx>-1) d2.announcements[idx] = {...d2.announcements[idx], title,body,category:cat,priority:prio,expiresAt:expires,targetType:tType,targetEmps:tEmps,mediaData,mediaName,mediaType,editedAt:new Date().toISOString(),editedBy:SESSION?.name||'Admin'};
+    if(idx>-1) d2.announcements[idx] = {...d2.announcements[idx], title,body,category:cat,priority:prio,expiresAt:expires,targetType:tType,targetEmps:tEmps,mediaUrl,mediaStorePath,mediaName,mediaType,editedAt:new Date().toISOString(),editedBy:SESSION?.name||'Admin'};
   } else {
     d2.announcements.unshift({
       id:'ANN'+Date.now(), title, body, category:cat, priority:prio,
       expiresAt:expires, targetType:tType, targetEmps:tEmps,
-      mediaData, mediaName, mediaType,
+      mediaUrl, mediaStorePath, mediaName, mediaType,
       createdAt:new Date().toISOString(), createdBy:SESSION?.name||'Admin',
       acks:[]
     });
@@ -13897,12 +13940,12 @@ function renderAnnouncements() {
       : (a.targetEmps||[]).length;
     const ackedCount = (a.acks||[]).length;
     const pct = totalRecip>0 ? Math.round(ackedCount/totalRecip*100) : 0;
-    const mediaHTML = a.mediaData
+    const mediaHTML = (a.mediaUrl||a.mediaData)
       ? a.mediaType?.startsWith('image/')
-        ? `<img src="${a.mediaData}" style="max-height:120px;border-radius:8px;margin-top:8px">`
+        ? `<img src="${a.mediaUrl||a.mediaData}" style="max-height:120px;border-radius:8px;margin-top:8px">`
         : a.mediaType?.startsWith('video/')
-          ? `<video src="${a.mediaData}" controls style="max-height:100px;border-radius:8px;margin-top:8px"></video>`
-          : `<a href="${a.mediaData}" download="${a.mediaName}" style="font-size:11px;color:var(--blue)">📎 ${a.mediaName}</a>`
+          ? `<video src="${a.mediaUrl||a.mediaData}" controls style="max-height:100px;border-radius:8px;margin-top:8px"></video>`
+          : `<a href="${a.mediaUrl||a.mediaData}" download="${a.mediaName}" style="font-size:11px;color:var(--blue)">📎 ${a.mediaName}</a>`
       : '';
     return `<div style="border-radius:12px;border:1px solid ${p.border};margin-bottom:8px;opacity:${expired?0.6:1};overflow:hidden">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:${p.bg};cursor:pointer;user-select:none" onclick="(function(){var b=document.getElementById('ann-body-${ai}'),c=document.getElementById('ann-caret-${ai}');if(b){b.style.display=b.style.display==='none'?'':'none';c.textContent=b.style.display===''?'▲':'▼';}})()">
@@ -13996,12 +14039,12 @@ function renderEpAnnouncements() {
   list.innerHTML = anns.map((a,ai)=>{
     const p = ANN_PRIORITY[a.priority]||ANN_PRIORITY.normal;
     const acked = (a.acks||[]).some(x=>x.empId===myId);
-    const mediaHTML = a.mediaData
+    const mediaHTML = (a.mediaUrl||a.mediaData)
       ? a.mediaType?.startsWith('image/')
-        ? `<img src="${a.mediaData}" style="max-width:100%;max-height:200px;border-radius:8px;margin-top:10px">`
+        ? `<img src="${a.mediaUrl||a.mediaData}" style="max-width:100%;max-height:200px;border-radius:8px;margin-top:10px">`
         : a.mediaType?.startsWith('video/')
-          ? `<video src="${a.mediaData}" controls style="max-width:100%;max-height:160px;border-radius:8px;margin-top:10px"></video>`
-          : `<a href="${a.mediaData}" download="${a.mediaName}" class="btn btn-ghost btn-sm" style="margin-top:8px">📎 Download ${a.mediaName}</a>`
+          ? `<video src="${a.mediaUrl||a.mediaData}" controls style="max-width:100%;max-height:160px;border-radius:8px;margin-top:10px"></video>`
+          : `<a href="${a.mediaUrl||a.mediaData}" download="${a.mediaName}" class="btn btn-ghost btn-sm" style="margin-top:8px">📎 Download ${a.mediaName}</a>`
       : '';
     const bodyId  = `ep-ann-card-body-${ai}`;
     const caretId = `ep-ann-caret-${ai}`;
@@ -14053,12 +14096,12 @@ function openAnnouncementModal(annId) {
   const p = ANN_PRIORITY[a.priority]||ANN_PRIORITY.normal;
   const acked = (a.acks||[]).some(x=>x.empId===myId);
   const myAck = (a.acks||[]).find(x=>x.empId===myId);
-  const mediaHTML = a.mediaData
+  const mediaHTML = (a.mediaUrl||a.mediaData)
     ? a.mediaType?.startsWith('image/')
-      ? `<img src="${a.mediaData}" style="max-width:100%;max-height:260px;border-radius:10px;margin-top:12px;display:block">`
+      ? `<img src="${a.mediaUrl||a.mediaData}" style="max-width:100%;max-height:260px;border-radius:10px;margin-top:12px;display:block">`
       : a.mediaType?.startsWith('video/')
-        ? `<video src="${a.mediaData}" controls style="max-width:100%;max-height:200px;border-radius:10px;margin-top:12px"></video>`
-        : `<a href="${a.mediaData}" download="${a.mediaName}" class="btn btn-ghost btn-sm" style="margin-top:10px;display:inline-flex">📎 Download ${a.mediaName}</a>`
+        ? `<video src="${a.mediaUrl||a.mediaData}" controls style="max-width:100%;max-height:200px;border-radius:10px;margin-top:12px"></video>`
+        : `<a href="${a.mediaUrl||a.mediaData}" download="${a.mediaName}" class="btn btn-ghost btn-sm" style="margin-top:10px;display:inline-flex">📎 Download ${a.mediaName}</a>`
     : '';
 
   const existing = byId('ann-view-overlay');
