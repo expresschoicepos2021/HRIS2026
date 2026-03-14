@@ -3,7 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ExpressChoice HRIS v20</title>
+<title>ExpressChoice HRIS v21</title>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDApzzwdplAqxbzyqGCfQVjN4ywWQddCqo",
+    authDomain: "expresschoicehris2026.firebaseapp.com",
+    projectId: "expresschoicehris2026",
+    storageBucket: "expresschoicehris2026.firebasestorage.app",
+    messagingSenderId: "602442675251",
+    appId: "1:602442675251:web:d0cf84596d888df6d29f46",
+    measurementId: "G-97RSKS3Z3N"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  window._fsdb = getFirestore(app);
+  window._fsstorage = getStorage(app);
+  window._fsDoc = doc;
+  window._fsSetDoc = setDoc;
+  window._fsGetDoc = getDoc;
+  window._fsOnSnapshot = onSnapshot;
+  window._fsRef = ref;
+  window._fsUploadBytes = uploadBytes;
+  window._fsGetDownloadURL = getDownloadURL;
+  window._firebaseReady = true;
+  console.log('Firebase initialized ✓');
+</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0b0d10;--surface:#111519;--surface2:#171b21;--surface3:#1c2028;--border:#222830;--border2:#2c3440;--text:#e2e8f0;--text2:#7a8898;--text3:#4a5668;--accent:#ff7a2f;--accent2:#e05010;--accent-bg:rgba(255,122,47,.10);--green:#4cd964;--green2:#27a847;--green-bg:rgba(76,217,100,.08);--red:#f04060;--red-bg:rgba(240,64,96,.08);--blue:#2a7fff;--blue2:#1455cc;--blue-bg:rgba(42,127,255,.08);--yellow:#ff7a2f;--yellow-bg:rgba(255,122,47,.10);--purple:#a870f0;--purple-bg:rgba(168,112,240,.08);--r:6px;--r2:10px;--transition:140ms ease}
@@ -3029,8 +3059,90 @@ function db(){
   }catch(e){console.warn('db read err',e);return seed();}
 }
 function save(d){
+  // Always write localStorage first for instant responsiveness
   try{localStorage.setItem(SK,JSON.stringify(d));}
   catch(e){toast('Storage quota exceeded — data may not persist.','err',6000);}
+  // Then sync to Firestore in background (no await — non-blocking)
+  if(window._firebaseReady && window._fsdb){
+    const stripped = stripBase64Photos(d);
+    window._fsSetDoc(window._fsDoc(window._fsdb,'hris','data'), stripped)
+      .catch(e=>console.warn('Firestore save failed:',e));
+  }
+}
+
+// Strip base64 photos before sending to Firestore (stay under 1MB doc limit)
+// Photos are stored in Firebase Storage instead
+function stripBase64Photos(d){
+  const clone = JSON.parse(JSON.stringify(d));
+  if(clone.employees){
+    clone.employees = clone.employees.map(e=>{
+      if(e.photo && e.photo.startsWith('data:')){
+        return {...e, photo: e._photoUrl || null}; // use cloud URL if available
+      }
+      return e;
+    });
+  }
+  if(clone.adminPhoto && clone.adminPhoto.startsWith('data:')) clone.adminPhoto = null;
+  return clone;
+}
+
+// Sync from Firestore into localStorage (called on login)
+async function syncFromFirestore(){
+  if(!window._firebaseReady || !window._fsdb) return;
+  try{
+    toast('Syncing data…','inf',2000);
+    const snap = await window._fsGetDoc(window._fsDoc(window._fsdb,'hris','data'));
+    if(snap.exists()){
+      const remote = snap.data();
+      // Merge: keep local base64 photos since Firestore strips them
+      const local = JSON.parse(localStorage.getItem(SK)||'{}');
+      if(local.employees && remote.employees){
+        remote.employees = remote.employees.map(re=>{
+          const le = (local.employees||[]).find(e=>e.id===re.id);
+          if(le && le.photo && le.photo.startsWith('data:')) re.photo = le.photo;
+          return re;
+        });
+      }
+      localStorage.setItem(SK, JSON.stringify(remote));
+      toast('Data synced ✓','ok',2000);
+    }
+  }catch(e){
+    console.warn('Firestore sync failed:',e);
+    toast('Sync failed — using local data.','wrn',3000);
+  }
+}
+
+// Upload photo to Firebase Storage, return cloud URL
+async function uploadToStorage(path, file){
+  if(!window._firebaseReady || !window._fsstorage) throw new Error('Storage not ready');
+  const storageRef = window._fsRef(window._fsstorage, path);
+  await window._fsUploadBytes(storageRef, file);
+  return await window._fsGetDownloadURL(storageRef);
+}
+
+// Start real-time listener — updates localStorage and re-renders when another device saves
+function startRealtimeSync(){
+  if(!window._firebaseReady || !window._fsdb) return;
+  window._fsOnSnapshot(window._fsDoc(window._fsdb,'hris','data'), (snap)=>{
+    if(!snap.exists()) return;
+    const remote = snap.data();
+    // Preserve local base64 photos
+    const local = JSON.parse(localStorage.getItem(SK)||'{}');
+    if(local.employees && remote.employees){
+      remote.employees = remote.employees.map(re=>{
+        const le = (local.employees||[]).find(e=>e.id===re.id);
+        if(le && le.photo && le.photo.startsWith('data:')) re.photo = le.photo;
+        return re;
+      });
+    }
+    localStorage.setItem(SK, JSON.stringify(remote));
+    // Re-render active page silently
+    const ap = document.querySelector('.page.active');
+    if(ap && SESSION){
+      const pid = ap.id.replace('page-','');
+      if(['dashboard','employees','schedule','payroll','queue'].includes(pid)) showPage(pid);
+    }
+  });
 }
 
 function seed() {
@@ -4805,6 +4917,14 @@ function saveAdminAccount() {
 }
 
 function startSession() {
+  // Sync from Firestore before showing app
+  syncFromFirestore().then(()=>{
+    _doStartSession();
+    startRealtimeSync();
+  }).catch(()=>_doStartSession());
+}
+
+function _doStartSession() {
   byId('login-screen').classList.add('hidden');
   byId('session-dot').className='session-dot '+SESSION.role;
   byId('session-label').textContent=SESSION.name;
@@ -11240,27 +11360,50 @@ function triggerEmpPhoto(){
 }
 function handleEmpPhoto(input){
   const file=input.files[0]; if(!file) return;
-  if(file.size>5*1024*1024){toast('Image too large (max 5MB).','err');return;}
+  if(file.size>10*1024*1024){toast('Image too large (max 10MB).','err');return;}
 
+  const empId=byId('ee-id')?.value||'unknown';
+
+  // Show local preview immediately
+  const localUrl=URL.createObjectURL(file);
+  const preview=byId('ee-photo-preview');
+  const initials=byId('ee-photo-initials');
+  if(preview){preview.src=localUrl;preview.style.display='block';}
+  if(initials){initials.style.display='none';}
+
+  const zone=byId('ee-photo-zone-wrap');
+
+  // Try Firebase Storage first (cloud URL, no size limit issues)
+  if(window._firebaseReady && window._fsstorage){
+    if(zone){ zone.dataset.pendingUploading='1'; }
+    toast('Uploading photo to cloud…','inf',3000);
+    const path=`photos/employees/${empId}_${Date.now()}.jpg`;
+    uploadToStorage(path,file).then(url=>{
+      if(zone){ zone.dataset.pendingPhoto=url; delete zone.dataset.pendingUploading; }
+      if(preview){ preview.src=url; }
+      toast('Photo uploaded ✓ — click Save Changes to apply.','ok',3000);
+    }).catch(err=>{
+      console.warn('Storage upload failed, falling back to base64',err);
+      _handleEmpPhotoBase64(file, zone, preview, initials);
+    });
+  } else {
+    // Fallback: base64 (works offline)
+    _handleEmpPhotoBase64(file, zone, preview, initials);
+  }
+  input.value='';
+}
+
+function _handleEmpPhotoBase64(file, zone, preview, initials){
   const reader=new FileReader();
   reader.onload=ev=>{
     const base64=ev.target.result;
-    // Show preview
-    const preview=byId('ee-photo-preview');
-    const initials=byId('ee-photo-initials');
     if(preview){preview.src=base64;preview.style.display='block';}
     if(initials){initials.style.display='none';}
-    // Store immediately — base64 is ready, no external upload needed
-    const zone=byId('ee-photo-zone-wrap');
-    if(zone){
-      zone.dataset.pendingPhoto=base64;
-      delete zone.dataset.pendingUploading;
-    }
+    if(zone){ zone.dataset.pendingPhoto=base64; delete zone.dataset.pendingUploading; }
     toast('Photo ready ✓ — click Save Changes to apply.','ok',3000);
   };
   reader.onerror=()=>toast('Could not read image — please try again.','err');
   reader.readAsDataURL(file);
-  input.value='';
 }
 
 // ── CARD-INLINE PHOTO UPLOAD (photo view avatar click) ──
@@ -11274,20 +11417,24 @@ function triggerCardPhoto(empId){
     if(!file) return;
     if(file.size>5*1024*1024){toast('Image too large (max 5MB).','err');return;}
     const reader=new FileReader();
-    reader.onload=ev=>{
-      const base64=ev.target.result;
-      const d=db();
-      const idx=d.employees.findIndex(e=>e.id===empId);
-      if(idx<0){toast('Employee not found.','err');return;}
-      d.employees[idx].photo=base64;
-      save(d);
-      renderEmployees(); // re-render cards immediately
-      toast('Photo updated ✓','ok',2500);
-      // Also refresh profile badge if this is the logged-in employee
-      if(SESSION&&SESSION.empId===empId) updateEmpNameBadge();
-    };
-    reader.onerror=()=>toast('Could not read image.','err');
-    reader.readAsDataURL(file);
+    // Try Firebase Storage, fallback to base64
+    if(window._firebaseReady && window._fsstorage){
+      toast('Uploading…','inf',2000);
+      const path=`photos/employees/${empId}_${Date.now()}.jpg`;
+      uploadToStorage(path,file).then(url=>{
+        _applyCardPhoto(empId, url);
+      }).catch(()=>{
+        // fallback
+        const r2=new FileReader();
+        r2.onload=ev=>_applyCardPhoto(empId, ev.target.result);
+        r2.readAsDataURL(file);
+      });
+    } else {
+      const reader=new FileReader();
+      reader.onload=ev=>_applyCardPhoto(empId, ev.target.result);
+      reader.onerror=()=>toast('Could not read image.','err');
+      reader.readAsDataURL(file);
+    }
   };
   inp.click();
 }
@@ -14745,6 +14892,17 @@ function toggleAllEmpCards(expand) {
     if(expand) c.classList.remove('collapsed');
     else c.classList.add('collapsed');
   });
+}
+
+function _applyCardPhoto(empId, photoUrl){
+  const d=db();
+  const idx=d.employees.findIndex(e=>e.id===empId);
+  if(idx<0){toast('Employee not found.','err');return;}
+  d.employees[idx].photo=photoUrl;
+  save(d);
+  renderEmployees();
+  toast('Photo updated ✓','ok',2500);
+  if(SESSION&&SESSION.empId===empId) updateEmpNameBadge();
 }
 
 // ══════════════════════════════════════════════════
