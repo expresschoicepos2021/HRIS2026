@@ -4,6 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ExpressChoice HRIS v20</title>
+<!-- ═══ FIREBASE SDK ═══ -->
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-auth-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-firestore-compat.min.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDApzzwdplAqxbzyqGCfQVjN4ywWQddCqo",
+  authDomain: "expresschoicehris2026.firebaseapp.com",
+  projectId: "expresschoicehris2026",
+  storageBucket: "expresschoicehris2026.firebasestorage.app",
+  messagingSenderId: "602442675251",
+  appId: "1:602442675251:web:d0cf84596d888df6d29f46"
+};
+firebase.initializeApp(firebaseConfig);
+const _auth = firebase.auth();
+const _fdb  = firebase.firestore();
+const DOC_REF = _fdb.collection('hris').doc('data');
+</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0b0d10;--surface:#111519;--surface2:#171b21;--surface3:#1c2028;--border:#222830;--border2:#2c3440;--text:#e2e8f0;--text2:#7a8898;--text3:#4a5668;--accent:#ff7a2f;--accent2:#e05010;--accent-bg:rgba(255,122,47,.10);--green:#4cd964;--green2:#27a847;--green-bg:rgba(76,217,100,.08);--red:#f04060;--red-bg:rgba(240,64,96,.08);--blue:#2a7fff;--blue2:#1455cc;--blue-bg:rgba(42,127,255,.08);--yellow:#ff7a2f;--yellow-bg:rgba(255,122,47,.10);--purple:#a870f0;--purple-bg:rgba(168,112,240,.08);--r:6px;--r2:10px;--transition:140ms ease}
@@ -1112,8 +1130,8 @@ h2[style*="font-size:18px"]{font-family:'Playfair Display',serif!important}
     </div>
 
     <div id="login-admin-form">
-      <div class="login-field"><label>Username</label><input id="la-user" placeholder="admin" value="admin"></div>
-      <div class="login-field"><label>Password / PIN</label><input id="la-pass" type="password" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="login-field"><label>Email</label><input id="la-user" type="email" placeholder="admin@expresschoice.com"></div>
+      <div class="login-field"><label>Password</label><input id="la-pass" type="password" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <div class="login-forgot" onclick="openResetPanel('admin')">Forgot password?</div>
       <button class="login-btn" onclick="doLogin()">Sign In as Admin →</button>
     </div>
@@ -2973,44 +2991,90 @@ document.addEventListener('keydown',e=>{
 });
 
 // ══════════════════════════════════════════════════
-//  PERSISTENT STORAGE  (hardened)
+//  PERSISTENT STORAGE  — Firebase Firestore
 // ══════════════════════════════════════════════════
-const SK = 'ec_hris_v3';
-function db(){
-  try{
-    const raw=localStorage.getItem(SK);
-    if(!raw) return seed();
-    const d=JSON.parse(raw);
-    // forward-compat guard
-    if(!d.employees) d.employees=[];
-    if(!d.schedules) d.schedules={};
-    if(!d.payroll)   d.payroll=[];
-    if(!d.incidents) d.incidents=[];
-    if(!d.attendance) d.attendance=[];
-    if(!d.requests)   d.requests=[];
-    if(!d.courses)    d.courses=[];
-    if(!d.enrollments)d.enrollments={};
-    if(!d.lms)        d.lms={};
-    if(!d.suggestions)d.suggestions=[];
-    if(!d.kb) d.kb=[];
-    if(!d.notifications) d.notifications=[];
-    if(!d.auditLog) d.auditLog=[];
-    if(d.nextEmp==null) d.nextEmp=1;
+const SK = 'ec_hris_v3'; // kept for theme/misc localStorage only
+
+// In-memory cache — populated on login via loadFromFirebase()
+let _DB_CACHE = null;
+
+function db() {
+  if (_DB_CACHE) return _DB_CACHE;
+  // Fallback: return seed so UI doesn't crash before data loads
+  return seed(false);
+}
+
+function save(d) {
+  _DB_CACHE = d;
+  // Async write to Firestore — fire and forget
+  DOC_REF.set(d).catch(e => {
+    console.warn('Firestore save err', e);
+    toast('Cloud save failed — check connection.', 'err', 5000);
+  });
+}
+
+async function loadFromFirebase() {
+  try {
+    const snap = await DOC_REF.get();
+    let d;
+    if (snap.exists) {
+      d = snap.data();
+    } else {
+      d = seed(false); // first run — seed and write
+      await DOC_REF.set(d);
+    }
+    // forward-compat guards
+    if(!d.employees)      d.employees=[];
+    if(!d.schedules)      d.schedules={};
+    if(!d.payroll)        d.payroll=[];
+    if(!d.incidents)      d.incidents=[];
+    if(!d.attendance)     d.attendance=[];
+    if(!d.requests)       d.requests=[];
+    if(!d.courses)        d.courses=[];
+    if(!d.enrollments)    d.enrollments={};
+    if(!d.lms)            d.lms={};
+    if(!d.suggestions)    d.suggestions=[];
+    if(!d.kb)             d.kb=[];
+    if(!d.notifications)  d.notifications=[];
+    if(!d.auditLog)       d.auditLog=[];
+    if(d.nextEmp==null)   d.nextEmp=1;
     if(!d.customBranches)   d.customBranches=['SHARED','BRANCH 1','BRANCH 2','TRUCKING'];
     if(!d.customPositions)  d.customPositions=['Supervisor','Cashier','Staff','Driver','Support','Assistant Supervisor'];
     if(!d.customEmpTypes)   d.customEmpTypes=['Regular','Part-time','On-call','Probationary','Contractual'];
     if(!d.customSepReasons) d.customSepReasons=['Resignation','End of Contract','Redundancy','AWOL','Retirement','Health Reasons','Mutual Agreement'];
-    if(!d.cashAdvances) d.cashAdvances=[];
-    if(!d.th13Snapshots) d.th13Snapshots=[]; // [{id,yr,calcDate,calcBy,entries:[{empId,basicPay,months,th,i1,i2}],totalTh,note}]
-    if(!d.announcements) d.announcements=[]; // [{id,title,body,priority,category,media,targetType,targetEmps,createdBy,createdAt,expiresAt,acks:[{empId,ackedAt}]}]
-    // Ensure all cashAdvance wallets have a payments array
+    if(!d.cashAdvances)     d.cashAdvances=[];
+    if(!d.th13Snapshots)    d.th13Snapshots=[];
+    if(!d.announcements)    d.announcements=[];
+    if(!d.pulseChecks)      d.pulseChecks=[];
+    if(!d.deductions)       d.deductions=[];
     d.cashAdvances.forEach(ca=>{ if(!ca.payments) ca.payments=[]; });
+    _DB_CACHE = d;
+    // Subscribe to real-time updates (syncs across devices/tabs)
+    DOC_REF.onSnapshot(snap2 => {
+      if (snap2.exists) {
+        _DB_CACHE = snap2.data();
+        // forward-compat guards on live update
+        if(!_DB_CACHE.employees)   _DB_CACHE.employees=[];
+        if(!_DB_CACHE.cashAdvances)_DB_CACHE.cashAdvances=[];
+        _DB_CACHE.cashAdvances.forEach(ca=>{ if(!ca.payments) ca.payments=[]; });
+        // Refresh live UI indicators
+        updateQueueBadge();
+        if(SESSION && SESSION.role==='admin') {
+          const queuePage = byId('page-queue');
+          if(queuePage && queuePage.classList.contains('active')) renderQueue();
+        }
+        if(SESSION && SESSION.role==='employee') {
+          const reqPage = byId('page-ep-requests');
+          if(reqPage && reqPage.classList.contains('active')) loadEpRequests();
+        }
+      }
+    });
     return d;
-  }catch(e){console.warn('db read err',e);return seed();}
-}
-function save(d){
-  try{localStorage.setItem(SK,JSON.stringify(d));}
-  catch(e){toast('Storage quota exceeded — data may not persist.','err',6000);}
+  } catch(e) {
+    console.error('Firebase load error', e);
+    toast('Could not load data from cloud. Check connection.', 'err', 8000);
+    return seed(false);
+  }
 }
 
 function seed() {
@@ -3043,7 +3107,7 @@ function seed() {
     customEmpTypes:   ['Regular','Part-time','On-call','Probationary','Contractual'],
     customSepReasons: ['Resignation','End of Contract','Redundancy','AWOL','Retirement','Health Reasons','Mutual Agreement'],
   };
-  save(d); return d;
+  return d;
 }
 
 // ══════════════════════════════════════════════════
@@ -4442,7 +4506,7 @@ function exportJSON(){
 // ══════════════════════════════════════════════════
 //  IMPORT JSON BACKUP
 // ══════════════════════════════════════════════════
-function importJSON(input){
+async function importJSON(input){
   const file=input.files[0]; if(!file) return;
   const reader=new FileReader();
   reader.onload=async ev=>{
@@ -4485,7 +4549,8 @@ function exportCSV(){
 async function resetAll(){
   const ok=await confirm2('Reset All Data','This permanently deletes all employees, schedules, payroll history, and incidents. This cannot be undone.','🗑 Reset Everything');
   if(!ok) return;
-  localStorage.removeItem(SK);
+  _DB_CACHE = null;
+  await DOC_REF.delete().catch(()=>{});
   toast('All data reset. Reloading…','wrn',2000);
   setTimeout(()=>location.reload(),1800);
 }
@@ -4563,29 +4628,37 @@ function switchLoginTab(tab) {
   byId('login-err').textContent='';
 }
 
-function doLogin() {
+async function doLogin() {
   const u=byId('la-user').value.trim();
   const p=byId('la-pass').value;
-  const d=db();
-  const effectivePass = d.adminPass || ADMIN_PASS;
-  if(u===ADMIN_USER && p===effectivePass) {
-    SESSION={role:'admin',empId:null,name:'Admin / HR'};
-    startSession();
-  } else {
-    byId('login-err').textContent='Invalid username or password.';
-  }
+  if(!u||!p){byId('login-err').textContent='Enter email and password.';return;}
+  byId('login-err').textContent='Signing in...';
+  _auth.signInWithEmailAndPassword(u, p)
+    .then(async () => {
+      await loadFromFirebase();
+      SESSION={role:'admin',empId:null,name:'Admin / HR'};
+      startSession();
+    })
+    .catch(err => {
+      byId('login-err').textContent = 'Invalid email or password.';
+      console.warn('Auth err', err);
+    });
 }
 
 function doEmpLogin() {
   const eid=byId('le-emp').value;
   const pin=byId('le-pin').value;
   if(!eid){byId('login-err').textContent='Please select your name.';return;}
-  const d=db();
-  const emp=d.employees.find(e=>e.id===eid);
-  if(!emp){byId('login-err').textContent='Employee not found.';return;}
-  if((emp.pin||'0000')!==pin){byId('login-err').textContent='Incorrect PIN.';return;}
-  SESSION={role:'employee',empId:eid,name:emp.name};
-  startSession();
+  byId('login-err').textContent='Signing in...';
+  loadFromFirebase().then(d => {
+    const emp=d.employees.find(e=>e.id===eid);
+    if(!emp){byId('login-err').textContent='Employee not found.';return;}
+    if((emp.pin||'0000')!==pin){byId('login-err').textContent='Incorrect PIN.';return;}
+    SESSION={role:'employee',empId:eid,name:emp.name};
+    startSession();
+  }).catch(() => {
+    byId('login-err').textContent='Connection error. Please try again.';
+  });
 }
 
 // ── SELF-RESET PASSWORD / PIN ──────────────────────────────────────
@@ -4949,7 +5022,10 @@ function logOut() {
 }
 function _doLogOut() {
   SESSION=null;
+  _DB_CACHE=null;
+  _auth.signOut().catch(()=>{});
   byId('login-screen').classList.remove('hidden');
+  byId('la-user').value='';
   byId('la-pass').value='';
   byId('le-pin').value='';
   byId('login-err').textContent='';
@@ -9791,7 +9867,7 @@ async function saveLeaveRequestDraft() {
 // ══════════════════════════════════════════════════
 //  KNOWLEDGE BASE
 // ══════════════════════════════════════════════════
-function handleKBUpload(input) {
+async function handleKBUpload(input) {
   const file=input.files[0]; if(!file) return;
   if(file.size>5*1024*1024){toast('File too large. Max 5MB.','err');return;}
   const reader=new FileReader();
@@ -9947,7 +10023,7 @@ function switchKBTab(tab) {
 // ══════════════════════════════════════════════════
 //  POLICY TEMPLATE LIBRARY
 // ══════════════════════════════════════════════════
-function handlePolicyTemplateImport(input) {
+async function handlePolicyTemplateImport(input) {
   const file = input.files[0]; if(!file) return;
   if(file.size > 5*1024*1024){ toast('File too large. Max 5MB.','err'); return; }
   const reader = new FileReader();
@@ -13574,60 +13650,25 @@ function renderThirteenth() {
 })();
 
 window.addEventListener('DOMContentLoaded',()=>{
-  db();
   applyI18N();
   startPhClock();
-  // Init pulseChecks array if missing
-  const d=db();
-  if(!d.pulseChecks){d.pulseChecks=[];save(d);}
-  if(!d.requests){d.requests=[];save(d);}
-  if(!d.deductions){d.deductions=[];save(d);}
 
-  // Restore theme
+  // Restore theme (localStorage still used for theme preference only)
   const savedTheme=localStorage.getItem('ec_theme');
   if(savedTheme==='light'){document.body.classList.add('light-mode');const b=byId('theme-btn');if(b)b.textContent='🌙 Dark';}
 
-  const leEmp=byId('le-emp');
-  d.employees.filter(e=>e.status==='active').forEach(e=>leEmp.add(new Option(e.name,e.id)));
-  setStatusFilter('active');
-  updateQueueBadge();
-
-  // ── LIVE SYNC FIX: refresh queue & badge whenever localStorage changes ──
-  // This fires when another tab/session (e.g. employee portal) writes new data.
-  window.addEventListener('storage', e => {
-    if(e.key !== SK) return;
+  // Pre-load employee list for login dropdown from Firestore
+  DOC_REF.get().then(snap => {
+    const d = snap.exists ? snap.data() : seed(false);
+    const leEmp=byId('le-emp');
+    leEmp.innerHTML='<option value="">Choose employee…</option>';
+    (d.employees||[]).filter(e=>e.status==='active').forEach(e=>leEmp.add(new Option(e.name,e.id)));
+    setStatusFilter('active');
     updateQueueBadge();
-    // If admin is currently viewing the queue page, re-render it live
-    if(SESSION && SESSION.role==='admin') {
-      const queuePage = byId('page-queue');
-      if(queuePage && queuePage.classList.contains('active')) {
-        renderQueue();
-      }
-    }
-    // Also refresh employee's own requests list if they are viewing it
-    if(SESSION && SESSION.role==='employee') {
-      const reqPage = byId('page-ep-requests');
-      if(reqPage && reqPage.classList.contains('active')) {
-        renderEpRequests();
-      }
-    }
-  });
+  }).catch(()=>{ console.warn('Could not pre-load employee list.'); });
 
-  // ── POLL FALLBACK: same-tab submissions (employee & admin in one tab) ──
-  // The storage event does NOT fire for same-tab writes, so we poll every 3s
-  // when the queue page is active to catch same-tab employee submissions.
-  let _lastQueueSnapshot = null;
-  setInterval(() => {
-    if(!SESSION || SESSION.role !== 'admin') return;
-    const queuePage = byId('page-queue');
-    if(!queuePage || !queuePage.classList.contains('active')) return;
-    const snapshot = (db().requests||[]).length + '|' + (db().deductions||[]).length + '|' + (db().pulseChecks||[]).filter(p=>!p.reviewed).length;
-    if(snapshot !== _lastQueueSnapshot) {
-      _lastQueueSnapshot = snapshot;
-      renderQueue();
-      updateQueueBadge();
-    }
-  }, 3000);
+  // ── LIVE SYNC: handled by onSnapshot in loadFromFirebase() ──
+  // No localStorage polling needed — Firestore real-time listener does this.
 
   // KB drag-drop
   const dropZone=byId('kb-drop-zone');
@@ -15134,7 +15175,7 @@ function mreStep2Next() {
   _mreSetDots(3);
 }
 
-function mreExecute() {
+async function mreExecute() {
   // Disable buttons to prevent double-click
   byId('mre-execute-btn').disabled = true;
   byId('mre-cancel-final').disabled = true;
@@ -15153,7 +15194,7 @@ function mreExecute() {
   }, 1000);
 }
 
-function _doMasterReset() {
+async function _doMasterReset() {
   try {
     const d = db();
     const ts = new Date().toISOString();
@@ -15192,8 +15233,9 @@ function _doMasterReset() {
       archiveWarning = ' (storage full — backup skipped)';
     }
 
-    // Step 3: Wipe live data
-    localStorage.removeItem(SK);
+    // Step 3: Wipe live data from Firestore
+    _DB_CACHE = null;
+    await DOC_REF.delete().catch(()=>{});
 
     // Step 4: Restore admin credentials into fresh seed
     const fresh = seed();
