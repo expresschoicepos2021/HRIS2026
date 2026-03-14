@@ -4678,20 +4678,32 @@ async function doLogin() {
     });
 }
 
-function doEmpLogin() {
+async function doEmpLogin() {
   const eid=byId('le-emp').value;
   const pin=byId('le-pin').value;
   if(!eid){byId('login-err').textContent='Please select your name.';return;}
   byId('login-err').textContent='Signing in...';
-  loadFromFirebase().then(d => {
-    const emp=d.employees.find(e=>e.id===eid);
-    if(!emp){byId('login-err').textContent='Employee not found.';return;}
-    if((emp.pin||'0000')!==pin){byId('login-err').textContent='Incorrect PIN.';return;}
+  try {
+    // First sign in anonymously so we have auth token to read Firestore
+    await _auth.signInAnonymously();
+    const d = await loadFromFirebase();
+    const emp = d.employees.find(e=>e.id===eid);
+    if(!emp){
+      await _auth.signOut();
+      byId('login-err').textContent='Employee not found.';
+      return;
+    }
+    if((emp.pin||'0000')!==pin){
+      await _auth.signOut();
+      byId('login-err').textContent='Incorrect PIN.';
+      return;
+    }
     SESSION={role:'employee',empId:eid,name:emp.name};
     startSession();
-  }).catch(() => {
+  } catch(err) {
+    console.warn('Emp login err', err);
     byId('login-err').textContent='Connection error. Please try again.';
-  });
+  }
 }
 
 // ── SELF-RESET PASSWORD / PIN ──────────────────────────────────────
@@ -13703,14 +13715,17 @@ window.addEventListener('DOMContentLoaded',()=>{
   const savedTheme=localStorage.getItem('ec_theme');
   if(savedTheme==='light'){document.body.classList.add('light-mode');const b=byId('theme-btn');if(b)b.textContent='🌙 Dark';}
 
-  // Pre-load employee list for login dropdown from Firestore
-  DOC_REF.get().then(snap => {
+  // Pre-load employee list for login dropdown
+  // Sign in anonymously temporarily just to read the employee list
+  _auth.signInAnonymously().then(() => DOC_REF.get()).then(snap => {
     const d = snap.exists ? snap.data() : seed(false);
     const leEmp=byId('le-emp');
     leEmp.innerHTML='<option value="">Choose employee…</option>';
     (d.employees||[]).filter(e=>e.status==='active').forEach(e=>leEmp.add(new Option(e.name,e.id)));
     setStatusFilter('active');
     updateQueueBadge();
+    // Sign back out — full auth happens on actual login
+    return _auth.signOut();
   }).catch(()=>{ console.warn('Could not pre-load employee list.'); });
 
   // ── LIVE SYNC: handled by onSnapshot in loadFromFirebase() ──
