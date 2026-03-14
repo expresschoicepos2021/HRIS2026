@@ -3027,11 +3027,23 @@ function db() {
 
 function save(d) {
   _DB_CACHE = d;
-  // Async write to Firestore — fire and forget
-  DOC_REF.set(d).catch(e => {
-    console.warn('Firestore save err', e);
-    toast('Cloud save failed — check connection.', 'err', 5000);
-  });
+  // Only write to Firestore if authenticated (admin) or rules allow open read
+  const doWrite = () => {
+    DOC_REF.set(d).catch(e => {
+      console.warn('Firestore save err', e);
+      toast('Cloud save failed — check connection.', 'err', 5000);
+    });
+  };
+  const user = _auth.currentUser;
+  if (user) {
+    doWrite();
+  } else {
+    // Wait briefly for auth state to resolve, then write
+    const unsub = _auth.onAuthStateChanged(u => {
+      unsub();
+      doWrite();
+    });
+  }
 }
 
 async function loadFromFirebase() {
