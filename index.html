@@ -4,45 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ExpressChoice HRIS v20</title>
-<!-- ═══ FIREBASE SDK ═══ -->
-<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-auth-compat.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-firestore-compat.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-storage-compat.min.js"></script>
-<script>
-const firebaseConfig = {
-  apiKey: "AIzaSyDApzzwdplAqxbzyqGCfQVjN4ywWQddCqo",
-  authDomain: "expresschoicehris2026.firebaseapp.com",
-  projectId: "expresschoicehris2026",
-  storageBucket: "expresschoicehris2026.firebasestorage.app",
-  messagingSenderId: "602442675251",
-  appId: "1:602442675251:web:d0cf84596d888df6d29f46"
-};
-firebase.initializeApp(firebaseConfig);
-const _auth    = firebase.auth();
-const _fdb     = firebase.firestore();
-const _storage = firebase.storage();
-const DOC_REF  = _fdb.collection('hris').doc('data');
-
-// ── Firebase Storage helper ──────────────────────
-// Uploads a file, returns its download URL
-async function uploadToStorage(path, file) {
-  const ref = _storage.ref(path);
-  await ref.put(file);
-  return await ref.getDownloadURL();
-}
-// Uploads a base64 data URL string, returns download URL
-async function uploadBase64ToStorage(path, dataUrl, contentType) {
-  const ref = _storage.ref(path);
-  await ref.putString(dataUrl, 'data_url', { contentType });
-  return await ref.getDownloadURL();
-}
-// Deletes a file from Storage by its full URL (best-effort)
-function deleteFromStorage(url) {
-  if(!url || !url.startsWith('https://')) return;
-  try { _storage.refFromURL(url).delete().catch(()=>{}); } catch(e){}
-}
-</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0b0d10;--surface:#111519;--surface2:#171b21;--surface3:#1c2028;--border:#222830;--border2:#2c3440;--text:#e2e8f0;--text2:#7a8898;--text3:#4a5668;--accent:#ff7a2f;--accent2:#e05010;--accent-bg:rgba(255,122,47,.10);--green:#4cd964;--green2:#27a847;--green-bg:rgba(76,217,100,.08);--red:#f04060;--red-bg:rgba(240,64,96,.08);--blue:#2a7fff;--blue2:#1455cc;--blue-bg:rgba(42,127,255,.08);--yellow:#ff7a2f;--yellow-bg:rgba(255,122,47,.10);--purple:#a870f0;--purple-bg:rgba(168,112,240,.08);--r:6px;--r2:10px;--transition:140ms ease}
@@ -120,7 +81,7 @@ body.light-mode input[type=date]::-webkit-calendar-picker-indicator:hover{opacit
 .emp-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:15px;cursor:pointer;transition:all .15s;position:relative}
 .emp-card:hover{border-color:var(--border2);transform:translateY(-1px)}
 .emp-card.inactive{opacity:.5}
-.emp-avatar{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;margin-bottom:9px}
+.emp-avatar{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;margin-bottom:9px;position:relative;overflow:hidden;cursor:pointer}
 .emp-name{font-size:13px;font-weight:600}.emp-role{font-size:11px;color:var(--text3);margin-top:1px}
 .emp-rate{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);margin-top:5px;font-weight:600}
 .emp-meta{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
@@ -1060,6 +1021,23 @@ h2[style*="font-size:18px"]{font-family:'Playfair Display',serif!important}
 .emp-grid.view-compact .emp-avatar{width:28px;height:28px;font-size:10px;margin-bottom:5px}
 .emp-grid.view-compact .emp-name{font-size:11px}
 .emp-grid.view-compact .emp-rate,.emp-grid.view-compact .emp-tenure,.emp-grid.view-compact .emp-role{font-size:10px}
+
+/* ── emp-grid photo/icon mode ── */
+.emp-grid.view-photo{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.emp-grid.view-photo .emp-card{padding:10px 8px;text-align:center;display:flex;flex-direction:column;align-items:center;position:relative}
+.emp-grid.view-photo .emp-avatar{width:48px;height:48px;border-radius:50%;font-size:16px;margin:0 auto 6px;border:2px solid var(--border2);flex-shrink:0;cursor:pointer;position:relative}
+.emp-grid.view-photo .emp-avatar img{border-radius:50%}
+.emp-grid.view-photo .emp-avatar:hover .emp-photo-overlay{opacity:1}
+.emp-photo-overlay{position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:10px;opacity:0;transition:opacity .15s;cursor:pointer;z-index:2}
+.emp-avatar:hover .emp-photo-overlay{opacity:1}
+.emp-grid.view-photo .emp-name{font-size:10px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.2}
+.emp-grid.view-photo .emp-role{font-size:8.5px;text-align:center;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.emp-grid.view-photo .emp-rate{font-size:9.5px;margin-top:2px}
+.emp-grid.view-photo .emp-tenure,.emp-grid.view-photo .emp-actions{display:none}
+.emp-grid.view-photo .emp-meta{justify-content:center;margin-top:4px;gap:3px}
+.emp-grid.view-photo .emp-meta .badge{font-size:8px;padding:1px 5px}
+.emp-grid.view-photo>[style*="accent"]{font-size:8.5px !important}
+.emp-grid.view-photo>[style*="text3"]{display:none}
 /* ── Emp card collapse ── */
 .emp-card-collapsible .emp-collapse-body{overflow:hidden;max-height:200px;transition:max-height .3s ease}
 .emp-card-collapsible.collapsed .emp-collapse-body{max-height:0}
@@ -1151,8 +1129,8 @@ h2[style*="font-size:18px"]{font-family:'Playfair Display',serif!important}
     </div>
 
     <div id="login-admin-form">
-      <div class="login-field"><label>Email</label><input id="la-user" type="email" placeholder="admin@expresschoice.com"></div>
-      <div class="login-field"><label>Password</label><input id="la-pass" type="password" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="login-field"><label>Username</label><input id="la-user" placeholder="admin" value="admin"></div>
+      <div class="login-field"><label>Password / PIN</label><input id="la-pass" type="password" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <div class="login-forgot" onclick="openResetPanel('admin')">Forgot password?</div>
       <button class="login-btn" onclick="doLogin()">Sign In as Admin →</button>
     </div>
@@ -1440,6 +1418,7 @@ h2[style*="font-size:18px"]{font-family:'Playfair Display',serif!important}
         <div class="enb-name" id="enb-name">—</div>
         <div class="enb-role" id="enb-role">—</div>
         <div class="enb-tenure" id="enb-tenure">—</div>
+        <div class="enb-empid" id="enb-empid" style="font-size:9px;color:var(--accent);font-family:'JetBrains Mono',monospace;font-weight:700;letter-spacing:.5px;margin-top:1px;">—</div>
         <div class="enb-clock" id="enb-clock-status">Not clocked in</div>
       </div>
     </div>
@@ -1517,6 +1496,7 @@ h2[style*="font-size:18px"]{font-family:'Playfair Display',serif!important}
           <input type="file" id="avatar-upload-input" accept="image/*" style="display:none" onchange="onAvatarUpload(event)">
           <div class="pcd-name" id="pcd-name">Admin / HR</div>
           <div class="pcd-role" id="pcd-role">Administrator</div>
+          <div id="pcd-empid" style="font-size:9px;color:var(--accent);font-family:'JetBrains Mono',monospace;font-weight:700;letter-spacing:.5px;margin-top:2px;text-align:center;display:none;"></div>
         </div>
         <div class="pcd-actions">
           <button class="pcd-action" id="pcd-password-btn" onclick="openPasswordReset();closeProfileCard()">
@@ -1620,9 +1600,10 @@ h2[style*="font-size:18px"]{font-family:'Playfair Display',serif!important}
       <div style="flex:1"></div>
       <!-- View toggle -->
       <div style="display:flex;gap:3px;background:var(--surface2);border-radius:6px;padding:3px;border:1px solid var(--border)">
-        <button id="emp-view-card" class="btn btn-sm" style="padding:4px 9px;background:var(--accent);color:#fff;border-radius:4px;font-size:11px" onclick="setEmpView('card')" title="Card view">⊞</button>
+        <button id="emp-view-card" class="btn btn-sm" style="padding:4px 9px;background:transparent;color:var(--text3);border-radius:4px;font-size:11px" onclick="setEmpView('card')" title="Card view">⊞</button>
         <button id="emp-view-list" class="btn btn-sm" style="padding:4px 9px;background:transparent;color:var(--text3);border-radius:4px;font-size:11px" onclick="setEmpView('list')" title="List view">☰</button>
-        <button id="emp-view-compact" class="btn btn-sm" style="padding:4px 9px;background:transparent;color:var(--text3);border-radius:4px;font-size:11px" onclick="setEmpView('compact')" title="Compact tiles">⊡</button>
+        <button id="emp-view-compact" class="btn btn-sm" style="padding:4px 9px;background:var(--accent);color:#fff;border-radius:4px;font-size:11px" onclick="setEmpView('compact')" title="Compact tiles">⊡</button>
+        <button id="emp-view-photo" class="btn btn-sm" style="padding:4px 9px;background:transparent;color:var(--text3);border-radius:4px;font-size:11px" onclick="setEmpView('photo')" title="Photo/Icon view">🪪</button>
       </div>
       <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="toggleAllEmpCards(true)">+ Expand All</button>
       <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="toggleAllEmpCards(false)">− Collapse All</button>
@@ -1971,7 +1952,7 @@ h2[style*="font-size:18px"]{font-family:'Playfair Display',serif!important}
     </div>
   </div>
 
-  <!-- ═══ CASH ADVANCE TRACKER ═══ -->\
+  <!-- ═══ CASH ADVANCE TRACKER ═══ -->
   <div class="page" id="page-cashadvance">
     <!-- Tab bar -->
     <div style="display:flex;gap:4px;margin-bottom:18px;border-bottom:2px solid var(--border);padding-bottom:0;">
@@ -2708,8 +2689,6 @@ h2[style*="font-size:18px"]{font-family:'Playfair Display',serif!important}
     <div id="ep-notif-list" style="max-width:680px;"></div>
   </div>
 
-  </div><!-- /content -->
-
   <!-- QUEUE MANAGEMENT PAGE (admin) -->
   <div class="page" id="page-queue" style="min-height:unset;">
     <div style="display:flex;gap:10px;margin-bottom:18px;align-items:center;flex-wrap:wrap;">
@@ -2726,6 +2705,8 @@ h2[style*="font-size:18px"]{font-family:'Playfair Display',serif!important}
     <div class="sg g4" id="queue-kpis" style="margin-bottom:18px;"></div>
     <div id="queue-list"></div>
   </div>
+
+  </div><!-- /content -->
 
   <!-- PULSE ADMIN REPORTS PAGE -->
   <div class="page" id="page-pulse-admin" style="min-height:unset;">
@@ -3012,102 +2993,44 @@ document.addEventListener('keydown',e=>{
 });
 
 // ══════════════════════════════════════════════════
-//  PERSISTENT STORAGE  — Firebase Firestore
+//  PERSISTENT STORAGE  (hardened)
 // ══════════════════════════════════════════════════
-const SK = 'ec_hris_v3'; // kept for theme/misc localStorage only
-
-// In-memory cache — populated on login via loadFromFirebase()
-let _DB_CACHE = null;
-
-function db() {
-  if (_DB_CACHE) return _DB_CACHE;
-  // Fallback: return seed so UI doesn't crash before data loads
-  return seed(false);
-}
-
-function save(d) {
-  _DB_CACHE = d;
-  // Only write to Firestore if authenticated (admin) or rules allow open read
-  const doWrite = () => {
-    DOC_REF.set(d).catch(e => {
-      console.warn('Firestore save err', e);
-      toast('Cloud save failed — check connection.', 'err', 5000);
-    });
-  };
-  const user = _auth.currentUser;
-  if (user) {
-    doWrite();
-  } else {
-    // Wait briefly for auth state to resolve, then write
-    const unsub = _auth.onAuthStateChanged(u => {
-      unsub();
-      doWrite();
-    });
-  }
-}
-
-async function loadFromFirebase() {
-  try {
-    const snap = await DOC_REF.get();
-    let d;
-    if (snap.exists) {
-      d = snap.data();
-    } else {
-      d = seed(false); // first run — seed and write
-      await DOC_REF.set(d);
-    }
-    // forward-compat guards
-    if(!d.employees)      d.employees=[];
-    if(!d.schedules)      d.schedules={};
-    if(!d.payroll)        d.payroll=[];
-    if(!d.incidents)      d.incidents=[];
-    if(!d.attendance)     d.attendance=[];
-    if(!d.requests)       d.requests=[];
-    if(!d.courses)        d.courses=[];
-    if(!d.enrollments)    d.enrollments={};
-    if(!d.lms)            d.lms={};
-    if(!d.suggestions)    d.suggestions=[];
-    if(!d.kb)             d.kb=[];
-    if(!d.notifications)  d.notifications=[];
-    if(!d.auditLog)       d.auditLog=[];
-    if(d.nextEmp==null)   d.nextEmp=1;
+const SK = 'ec_hris_v3';
+function db(){
+  try{
+    const raw=localStorage.getItem(SK);
+    if(!raw) return seed();
+    const d=JSON.parse(raw);
+    // forward-compat guard
+    if(!d.employees) d.employees=[];
+    if(!d.schedules) d.schedules={};
+    if(!d.payroll)   d.payroll=[];
+    if(!d.incidents) d.incidents=[];
+    if(!d.attendance) d.attendance=[];
+    if(!d.requests)   d.requests=[];
+    if(!d.courses)    d.courses=[];
+    if(!d.enrollments)d.enrollments={};
+    if(!d.lms)        d.lms={};
+    if(!d.suggestions)d.suggestions=[];
+    if(!d.kb) d.kb=[];
+    if(!d.notifications) d.notifications=[];
+    if(!d.auditLog) d.auditLog=[];
+    if(d.nextEmp==null) d.nextEmp=1;
     if(!d.customBranches)   d.customBranches=['SHARED','BRANCH 1','BRANCH 2','TRUCKING'];
     if(!d.customPositions)  d.customPositions=['Supervisor','Cashier','Staff','Driver','Support','Assistant Supervisor'];
     if(!d.customEmpTypes)   d.customEmpTypes=['Regular','Part-time','On-call','Probationary','Contractual'];
     if(!d.customSepReasons) d.customSepReasons=['Resignation','End of Contract','Redundancy','AWOL','Retirement','Health Reasons','Mutual Agreement'];
-    if(!d.cashAdvances)     d.cashAdvances=[];
-    if(!d.th13Snapshots)    d.th13Snapshots=[];
-    if(!d.announcements)    d.announcements=[];
-    if(!d.pulseChecks)      d.pulseChecks=[];
-    if(!d.deductions)       d.deductions=[];
+    if(!d.cashAdvances) d.cashAdvances=[];
+    if(!d.th13Snapshots) d.th13Snapshots=[]; // [{id,yr,calcDate,calcBy,entries:[{empId,basicPay,months,th,i1,i2}],totalTh,note}]
+    if(!d.announcements) d.announcements=[]; // [{id,title,body,priority,category,media,targetType,targetEmps,createdBy,createdAt,expiresAt,acks:[{empId,ackedAt}]}]
+    // Ensure all cashAdvance wallets have a payments array
     d.cashAdvances.forEach(ca=>{ if(!ca.payments) ca.payments=[]; });
-    _DB_CACHE = d;
-    // Subscribe to real-time updates (syncs across devices/tabs)
-    DOC_REF.onSnapshot(snap2 => {
-      if (snap2.exists) {
-        _DB_CACHE = snap2.data();
-        // forward-compat guards on live update
-        if(!_DB_CACHE.employees)   _DB_CACHE.employees=[];
-        if(!_DB_CACHE.cashAdvances)_DB_CACHE.cashAdvances=[];
-        _DB_CACHE.cashAdvances.forEach(ca=>{ if(!ca.payments) ca.payments=[]; });
-        // Refresh live UI indicators
-        updateQueueBadge();
-        if(SESSION && SESSION.role==='admin') {
-          const queuePage = byId('page-queue');
-          if(queuePage && queuePage.classList.contains('active')) renderQueue();
-        }
-        if(SESSION && SESSION.role==='employee') {
-          const reqPage = byId('page-ep-requests');
-          if(reqPage && reqPage.classList.contains('active')) loadEpRequests();
-        }
-      }
-    });
     return d;
-  } catch(e) {
-    console.error('Firebase load error', e);
-    toast('Could not load data from cloud. Check connection.', 'err', 8000);
-    return seed(false);
-  }
+  }catch(e){console.warn('db read err',e);return seed();}
+}
+function save(d){
+  try{localStorage.setItem(SK,JSON.stringify(d));}
+  catch(e){toast('Storage quota exceeded — data may not persist.','err',6000);}
 }
 
 function seed() {
@@ -3140,7 +3063,7 @@ function seed() {
     customEmpTypes:   ['Regular','Part-time','On-call','Probationary','Contractual'],
     customSepReasons: ['Resignation','End of Contract','Redundancy','AWOL','Retirement','Health Reasons','Mutual Agreement'],
   };
-  return d;
+  save(d); return d;
 }
 
 // ══════════════════════════════════════════════════
@@ -3345,7 +3268,7 @@ function showPage(id) {
   document.getElementById('page-title').textContent = m[0];
   document.getElementById('page-sub').textContent = m[1];
   if(id==='dashboard')    renderDashboard();
-  if(id==='employees')    renderEmployees();
+  if(id==='employees'){setEmpView(_empView);renderEmployees();}
   if(id==='schedule')     renderSchedule();
   if(id==='incidents')    renderIncidents();
   if(id==='attendance')   renderAttLog();
@@ -3513,9 +3436,15 @@ function renderEmployees() {
     const wks = weeksSince(e.hired);
     const isArchived = e.status==='archived';
     const statusBadge = e.status==='inactive'?'<span class="badge badge-red">SEPARATED</span>':e.status==='archived'?'<span class="badge badge-archive">ARCHIVED</span>':'';
+    const avatarInner = e.photo
+      ? `<img src="${e.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:9px;display:block;">`
+      : `${e.name.split(' ').map(w=>w[0]).join('').slice(0,2)}`;
+    const avatarHtml = e.photo
+      ? `<div class="emp-avatar" style="background:${e.color}22;color:${e.color};overflow:hidden;padding:0;" onclick="event.stopPropagation();triggerCardPhoto('${e.id}')">${avatarInner}<div class="emp-photo-overlay">📷</div></div>`
+      : `<div class="emp-avatar" style="background:${e.color}22;color:${e.color};position:relative;" onclick="event.stopPropagation();triggerCardPhoto('${e.id}')">${avatarInner}<div class="emp-photo-overlay">📷</div></div>`;
     return `<div class="emp-card ${e.status==='inactive'?'inactive':isArchived?'archived':''}" onclick="${isArchived?'':'openEmpDetail(\''+e.id+'\')'}">
       <div class="emp-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditEmp('${e.id}')">✏</button></div>
-      <div class="emp-avatar" style="background:${e.color}22;color:${e.color}">${e.name.split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
+      ${avatarHtml}
       <div class="emp-name">${e.name}</div>
       <div class="emp-role">${e.position}</div>
       <div class="emp-rate">${pesos(e.rate)}/day</div>
@@ -3619,9 +3548,15 @@ function saveEditEmp() {
     }
   });
   d.employees[i]={...d.employees[i],...newData};
-  // Save photo if one was uploaded
+  // Save photo if one was uploaded — guard: only use URL if upload is complete
   const photoZone=byId('ee-photo-zone-wrap');
-  if(photoZone&&photoZone.dataset.pendingPhoto){
+  if(photoZone&&photoZone.dataset.pendingUploading){
+    // Upload still in progress — save other fields but warn about photo
+    toast('⚠️ Photo still uploading — save was applied without it. Wait a moment then save again to include the photo.','wrn',6000);
+    save(d);
+    return;
+  }
+  if(photoZone&&photoZone.dataset.pendingPhoto&&(photoZone.dataset.pendingPhoto.startsWith('data:')||photoZone.dataset.pendingPhoto.startsWith('https://'))){
     d.employees[i].photo=photoZone.dataset.pendingPhoto;
     delete photoZone.dataset.pendingPhoto;
   }
@@ -4539,7 +4474,7 @@ function exportJSON(){
 // ══════════════════════════════════════════════════
 //  IMPORT JSON BACKUP
 // ══════════════════════════════════════════════════
-async function importJSON(input){
+function importJSON(input){
   const file=input.files[0]; if(!file) return;
   const reader=new FileReader();
   reader.onload=async ev=>{
@@ -4582,8 +4517,7 @@ function exportCSV(){
 async function resetAll(){
   const ok=await confirm2('Reset All Data','This permanently deletes all employees, schedules, payroll history, and incidents. This cannot be undone.','🗑 Reset Everything');
   if(!ok) return;
-  _DB_CACHE = null;
-  await DOC_REF.delete().catch(()=>{});
+  localStorage.removeItem(SK);
   toast('All data reset. Reloading…','wrn',2000);
   setTimeout(()=>location.reload(),1800);
 }
@@ -4661,49 +4595,29 @@ function switchLoginTab(tab) {
   byId('login-err').textContent='';
 }
 
-async function doLogin() {
+function doLogin() {
   const u=byId('la-user').value.trim();
   const p=byId('la-pass').value;
-  if(!u||!p){byId('login-err').textContent='Enter email and password.';return;}
-  byId('login-err').textContent='Signing in...';
-  _auth.signInWithEmailAndPassword(u, p)
-    .then(async () => {
-      await loadFromFirebase();
-      SESSION={role:'admin',empId:null,name:'Admin / HR'};
-      startSession();
-    })
-    .catch(err => {
-      byId('login-err').textContent = 'Invalid email or password.';
-      console.warn('Auth err', err);
-    });
+  const d=db();
+  const effectivePass = d.adminPass || ADMIN_PASS;
+  if(u===ADMIN_USER && p===effectivePass) {
+    SESSION={role:'admin',empId:null,name:'Admin / HR'};
+    startSession();
+  } else {
+    byId('login-err').textContent='Invalid username or password.';
+  }
 }
 
-async function doEmpLogin() {
+function doEmpLogin() {
   const eid=byId('le-emp').value;
   const pin=byId('le-pin').value;
   if(!eid){byId('login-err').textContent='Please select your name.';return;}
-  byId('login-err').textContent='Signing in...';
-  try {
-    // First sign in anonymously so we have auth token to read Firestore
-    await _auth.signInAnonymously();
-    const d = await loadFromFirebase();
-    const emp = d.employees.find(e=>e.id===eid);
-    if(!emp){
-      await _auth.signOut();
-      byId('login-err').textContent='Employee not found.';
-      return;
-    }
-    if((emp.pin||'0000')!==pin){
-      await _auth.signOut();
-      byId('login-err').textContent='Incorrect PIN.';
-      return;
-    }
-    SESSION={role:'employee',empId:eid,name:emp.name};
-    startSession();
-  } catch(err) {
-    console.warn('Emp login err', err);
-    byId('login-err').textContent='Connection error. Please try again.';
-  }
+  const d=db();
+  const emp=d.employees.find(e=>e.id===eid);
+  if(!emp){byId('login-err').textContent='Employee not found.';return;}
+  if((emp.pin||'0000')!==pin){byId('login-err').textContent='Incorrect PIN.';return;}
+  SESSION={role:'employee',empId:eid,name:emp.name};
+  startSession();
 }
 
 // ── SELF-RESET PASSWORD / PIN ──────────────────────────────────────
@@ -4958,6 +4872,18 @@ function updateProfileCard() {
     pcdRole.textContent = isAdmin ? 'Administrator' : 'Employee · ' + (_pcdEmp?.branch||'') + (_pcdEmp?.empNumber ? ' · ' + _pcdEmp.empNumber : '');
   }
 
+  // Employee ID line under profile card
+  const pcdEmpId = byId('pcd-empid');
+  if(pcdEmpId){
+    const _emp = isAdmin ? null : (SESSION.empId ? empById(SESSION.empId) : null);
+    if(!isAdmin && _emp && (_emp.empNumber||_emp.id)){
+      pcdEmpId.textContent = _emp.empNumber||_emp.id;
+      pcdEmpId.style.display = 'block';
+    } else {
+      pcdEmpId.style.display = 'none';
+    }
+  }
+
   // Password button label
   const pwBtn = byId('pcd-password-btn');
   if(pwBtn) pwBtn.querySelector('span:last-child').textContent = isAdmin ? 'Change Password' : 'Change PIN';
@@ -5008,27 +4934,23 @@ function triggerAvatarUpload() {
 function onAvatarUpload(e) {
   const file = e.target.files?.[0];
   if(!file) return;
-  toast('Uploading photo…','ok',2000);
-  const path = SESSION.role==='admin'
-    ? 'photos/admin/profile.jpg'
-    : `photos/employees/${SESSION.empId}.jpg`;
-  uploadToStorage(path, file).then(url => {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const photo = ev.target.result;
     const d = db();
     if(SESSION.role==='admin'){
-      d.adminPhoto = url;
+      d.adminPhoto = photo;
     } else if(SESSION.empId){
       const idx = d.employees.findIndex(x=>x.id===SESSION.empId);
-      if(idx>=0) d.employees[idx].photo = url;
+      if(idx>=0) d.employees[idx].photo=photo;
     }
     save(d);
     updateProfileCard();
     toast('Profile photo updated!','ok');
     logAudit('update', SESSION.role==='admin'?'admin':'employee', SESSION.empId||'admin', `${SESSION.name} updated their profile photo`, null, null);
-  }).catch(err => {
-    console.error('Photo upload failed', err);
-    toast('Photo upload failed. Try again.','err');
-  });
-  e.target.value='';
+  };
+  reader.readAsDataURL(file);
+  e.target.value=''; // reset
 }
 
 function toggleThemeFromCard() {
@@ -5071,10 +4993,7 @@ function logOut() {
 }
 function _doLogOut() {
   SESSION=null;
-  _DB_CACHE=null;
-  _auth.signOut().catch(()=>{});
   byId('login-screen').classList.remove('hidden');
-  byId('la-user').value='';
   byId('la-pass').value='';
   byId('le-pin').value='';
   byId('login-err').textContent='';
@@ -7753,19 +7672,20 @@ function lmsLessonRowHtml(l, i) {
 
 function lmsHandleLessonFile(input, i) {
   const file = input.files[0]; if(!file) return;
-  const maxMB = 100;
+  const maxMB = 10;
   if(file.size > maxMB*1024*1024) { toast(`File too large. Max ${maxMB}MB.`,'err'); return; }
-  toast('Uploading file…','ok',4000);
-  const storePath = `academy/${Date.now()}_${file.name}`;
-  uploadToStorage(storePath, file).then(url => {
-    byId('lce-lfile-data-'+i).value = url;
+  const reader = new FileReader();
+  reader.onload = e => {
+    byId('lce-lfile-data-'+i).value = e.target.result;
     byId('lce-lfile-name2-'+i).value = file.name;
     const nameEl = byId('lce-lfile-name-'+i);
     if(nameEl) nameEl.textContent = '📎 '+file.name;
+    // Clear URL if file uploaded
     const urlEl = byId('lce-lurl-'+i);
     if(urlEl && !urlEl.value) urlEl.placeholder = 'URL overrides file if both set';
-    toast('File uploaded to cloud!','ok');
-  }).catch(()=>{ toast('File upload failed. Try again.','err'); });
+    toast('File attached to lesson!','ok');
+  };
+  reader.readAsDataURL(file);
 }
 
 function lmsUpdateLessonType(i) {
@@ -9915,16 +9835,18 @@ async function saveLeaveRequestDraft() {
 // ══════════════════════════════════════════════════
 //  KNOWLEDGE BASE
 // ══════════════════════════════════════════════════
-async function handleKBUpload(input) {
+function handleKBUpload(input) {
   const file=input.files[0]; if(!file) return;
   if(file.size>5*1024*1024){toast('File too large. Max 5MB.','err');return;}
-  const catMap={'pdf':'Policy','doc':'Training','docx':'Training','xlsx':'Forms','jpg':'Other','png':'Other','txt':'Memo'};
-  const ext=file.name.split('.').pop().toLowerCase();
-  const suggestCat=catMap[ext]||'Other';
-  const d=db();
-  const empList=(d.employees||[]).filter(ev=>(ev.status||'active')==='active');
-  const empOpts=empList.map(ev=>`<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer"><input type="checkbox" class="kb-emp-chk" value="${ev.id}" style="accent-color:var(--accent)"><span>${ev.name}</span><span style="font-size:10px;color:var(--text3)">${ev.branch}</span></label>`).join('');
-  const defaultTitle=file.name.replace(/\.([^.]+)$/, '');
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const catMap={'pdf':'Policy','doc':'Training','docx':'Training','xlsx':'Forms','jpg':'Other','png':'Other','txt':'Memo'};
+    const ext=file.name.split('.').pop().toLowerCase();
+    const suggestCat=catMap[ext]||'Other';
+    const d=db();
+    const empList=(d.employees||[]).filter(ev=>(ev.status||'active')==='active');
+    const empOpts=empList.map(ev=>`<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer"><input type="checkbox" class="kb-emp-chk" value="${ev.id}" style="accent-color:var(--accent)"><span>${ev.name}</span><span style="font-size:10px;color:var(--text3)">${ev.branch}</span></label>`).join('');
+    const defaultTitle=file.name.replace(/\.([^.]+)$/, '');
     const uploadHTML=`
       <div style="margin-bottom:12px">
         <label class="form-label">Document Title *</label>
@@ -9960,18 +9882,10 @@ async function handleKBUpload(input) {
     const targetEmps=targetType==='specific'
       ? [...document.querySelectorAll('.kb-emp-chk:checked')].map(x=>x.value)
       : [];
-    toast('Uploading document…','ok',3000);
-    const storePath = `kb/${Date.now()}_${file.name}`;
-    let fileUrl = '';
-    try {
-      fileUrl = await uploadToStorage(storePath, file);
-    } catch(err) {
-      toast('File upload failed. Try again.','err'); input.value=''; return;
-    }
     if(!d.kb) d.kb=[];
     d.kb.push({
       id:'KB'+Date.now(), title:titleVal, cat:suggestCat,
-      filename:file.name, size:file.size, url:fileUrl, storePath,
+      filename:file.name, size:file.size, data:e.target.result,
       uploaded:new Date().toISOString(), uploadedBy:SESSION?.name||'Admin',
       targetType, targetEmps
     });
@@ -9980,6 +9894,8 @@ async function handleKBUpload(input) {
     const visNote=targetType==='all'?'all employees':`${targetEmps.length} employee(s)`;
     toast(`"${titleVal}" uploaded · visible to ${visNote}.`,'ok');
     renderKB();
+  };
+  reader.readAsDataURL(file);
 }
 
 function renderKB() {
@@ -10075,13 +9991,15 @@ function switchKBTab(tab) {
 // ══════════════════════════════════════════════════
 //  POLICY TEMPLATE LIBRARY
 // ══════════════════════════════════════════════════
-async function handlePolicyTemplateImport(input) {
+function handlePolicyTemplateImport(input) {
   const file = input.files[0]; if(!file) return;
   if(file.size > 5*1024*1024){ toast('File too large. Max 5MB.','err'); return; }
-  const typeMap = {'pdf':'HR Policy','doc':'HR Policy','docx':'HR Policy','xlsx':'Compensation','txt':'Other'};
-  const ext = file.name.split('.').pop().toLowerCase();
-  const suggestType = typeMap[ext] || 'Other';
-  const defaultTitle = file.name.replace(/\.([^.]+)$/, '');
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const typeMap = {'pdf':'HR Policy','doc':'HR Policy','docx':'HR Policy','xlsx':'Compensation','txt':'Other'};
+    const ext = file.name.split('.').pop().toLowerCase();
+    const suggestType = typeMap[ext] || 'Other';
+    const defaultTitle = file.name.replace(/\.([^.]+)$/, '');
     const formHTML = `
       <div style="margin-bottom:12px">
         <label class="form-label">Template Title *</label>
@@ -10119,14 +10037,6 @@ async function handlePolicyTemplateImport(input) {
     if(!ok){ input.value=''; return; }
     const titleVal = (byId('pt-title-input')?.value||'').trim();
     if(!titleVal){ toast('Please enter a template title.','warn'); input.value=''; return; }
-    toast('Uploading template…','ok',3000);
-    const storePath = `policy-templates/${Date.now()}_${file.name}`;
-    let fileUrl = '';
-    try {
-      fileUrl = await uploadToStorage(storePath, file);
-    } catch(err) {
-      toast('File upload failed. Try again.','err'); input.value=''; return;
-    }
     const d = db();
     if(!d.policyTemplates) d.policyTemplates = [];
     d.policyTemplates.push({
@@ -10137,7 +10047,7 @@ async function handlePolicyTemplateImport(input) {
       desc: (byId('pt-desc-input')?.value||'').trim(),
       filename: file.name,
       size: file.size,
-      url: fileUrl, storePath,
+      data: e.target.result,
       imported: new Date().toISOString(),
       importedBy: SESSION?.name || 'Admin'
     });
@@ -10145,6 +10055,8 @@ async function handlePolicyTemplateImport(input) {
     input.value = '';
     toast(`"${titleVal}" saved to Policy Template Library.`,'ok');
     renderPolicyTemplates();
+  };
+  reader.readAsDataURL(file);
 }
 
 let _ptView = 'icon'; // icon | grid | list | compact
@@ -10245,8 +10157,8 @@ function renderPolicyTemplates() {
 function downloadPolicyTemplate(id) {
   const d = db();
   const t = (d.policyTemplates||[]).find(x=>x.id===id);
-  if(!t||(!t.url&&!t.data)) return;
-  const a = Object.assign(document.createElement('a'),{href:t.url||t.data,download:t.filename,target:'_blank'});
+  if(!t||!t.data) return;
+  const a = Object.assign(document.createElement('a'),{href:t.data,download:t.filename});
   a.click();
   toast(`Downloading "${t.title}"…`,'ok');
 }
@@ -10304,10 +10216,8 @@ async function deletePolicyTemplate(id) {
 }
 
 function downloadKBDoc(id) {
-  const d=db(); const doc=d.kb?.find(x=>x.id===id); if(!doc) return;
-  const url = doc.url || doc.data;
-  if(!url) return;
-  const a=Object.assign(document.createElement('a'),{href:url,download:doc.filename,target:'_blank'});
+  const d=db(); const doc=d.kb?.find(x=>x.id===id); if(!doc||!doc.data) return;
+  const a=Object.assign(document.createElement('a'),{href:doc.data,download:doc.filename});
   a.click();
   toast(`Downloading "${doc.title}"…`,'ok');
 }
@@ -11330,23 +11240,56 @@ function triggerEmpPhoto(){
 }
 function handleEmpPhoto(input){
   const file=input.files[0]; if(!file) return;
-  if(file.size>2*1024*1024){toast('Image too large (max 2MB).','err');return;}
-  // Show local preview immediately
-  const localUrl = URL.createObjectURL(file);
-  const preview=byId('ee-photo-preview');
-  const initials=byId('ee-photo-initials');
-  if(preview){preview.src=localUrl;preview.style.display='block';}
-  if(initials){initials.style.display='none';}
-  // Upload to Storage, store URL for saveEditEmp to pick up
-  toast('Uploading photo…','ok',2000);
-  const path = `photos/employees/emp_${Date.now()}.jpg`;
-  uploadToStorage(path, file).then(url => {
+  if(file.size>5*1024*1024){toast('Image too large (max 5MB).','err');return;}
+
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const base64=ev.target.result;
+    // Show preview
+    const preview=byId('ee-photo-preview');
+    const initials=byId('ee-photo-initials');
+    if(preview){preview.src=base64;preview.style.display='block';}
+    if(initials){initials.style.display='none';}
+    // Store immediately — base64 is ready, no external upload needed
     const zone=byId('ee-photo-zone-wrap');
-    if(zone) zone.dataset.pendingPhoto=url;
-    const zone2=byId('emp-photo-zone');
-    if(zone2){zone2.dataset.photo=url;}
-    toast('Photo ready.','ok',1500);
-  }).catch(()=>{ toast('Photo upload failed.','err'); });
+    if(zone){
+      zone.dataset.pendingPhoto=base64;
+      delete zone.dataset.pendingUploading;
+    }
+    toast('Photo ready ✓ — click Save Changes to apply.','ok',3000);
+  };
+  reader.onerror=()=>toast('Could not read image — please try again.','err');
+  reader.readAsDataURL(file);
+  input.value='';
+}
+
+// ── CARD-INLINE PHOTO UPLOAD (photo view avatar click) ──
+function triggerCardPhoto(empId){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='image/*'; inp.style.display='none';
+  document.body.appendChild(inp);
+  inp.onchange=()=>{
+    const file=inp.files[0];
+    document.body.removeChild(inp);
+    if(!file) return;
+    if(file.size>5*1024*1024){toast('Image too large (max 5MB).','err');return;}
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const base64=ev.target.result;
+      const d=db();
+      const idx=d.employees.findIndex(e=>e.id===empId);
+      if(idx<0){toast('Employee not found.','err');return;}
+      d.employees[idx].photo=base64;
+      save(d);
+      renderEmployees(); // re-render cards immediately
+      toast('Photo updated ✓','ok',2500);
+      // Also refresh profile badge if this is the logged-in employee
+      if(SESSION&&SESSION.empId===empId) updateEmpNameBadge();
+    };
+    reader.onerror=()=>toast('Could not read image.','err');
+    reader.readAsDataURL(file);
+  };
+  inp.click();
 }
 
 // ══════════════════════════════════════════════════
@@ -12101,6 +12044,8 @@ function updateEmpNameBadge(){
   if(nameEl) nameEl.textContent=emp.name||'—';
   if(roleEl) roleEl.textContent=`${emp.position||'Staff'} · ${emp.branch||''}`;
   if(tenureEl) tenureEl.textContent=`Tenure: ${tenureStr}`;
+  const empIdEl=byId('enb-empid');
+  if(empIdEl) empIdEl.textContent=emp.empNumber||emp.id||'';
   if(clockEl){clockEl.textContent=clockStatus;clockEl.style.color=clockColor;}
 }
 
@@ -13708,28 +13653,60 @@ function renderThirteenth() {
 })();
 
 window.addEventListener('DOMContentLoaded',()=>{
+  db();
   applyI18N();
   startPhClock();
+  // Init pulseChecks array if missing
+  const d=db();
+  if(!d.pulseChecks){d.pulseChecks=[];save(d);}
+  if(!d.requests){d.requests=[];save(d);}
+  if(!d.deductions){d.deductions=[];save(d);}
 
-  // Restore theme (localStorage still used for theme preference only)
+  // Restore theme
   const savedTheme=localStorage.getItem('ec_theme');
   if(savedTheme==='light'){document.body.classList.add('light-mode');const b=byId('theme-btn');if(b)b.textContent='🌙 Dark';}
 
-  // Pre-load employee list for login dropdown
-  // Sign in anonymously temporarily just to read the employee list
-  _auth.signInAnonymously().then(() => DOC_REF.get()).then(snap => {
-    const d = snap.exists ? snap.data() : seed(false);
-    const leEmp=byId('le-emp');
-    leEmp.innerHTML='<option value="">Choose employee…</option>';
-    (d.employees||[]).filter(e=>e.status==='active').forEach(e=>leEmp.add(new Option(e.name,e.id)));
-    setStatusFilter('active');
-    updateQueueBadge();
-    // Sign back out — full auth happens on actual login
-    return _auth.signOut();
-  }).catch(()=>{ console.warn('Could not pre-load employee list.'); });
+  const leEmp=byId('le-emp');
+  d.employees.filter(e=>e.status==='active').forEach(e=>leEmp.add(new Option(e.name,e.id)));
+  setStatusFilter('active');
+  updateQueueBadge();
 
-  // ── LIVE SYNC: handled by onSnapshot in loadFromFirebase() ──
-  // No localStorage polling needed — Firestore real-time listener does this.
+  // ── LIVE SYNC FIX: refresh queue & badge whenever localStorage changes ──
+  // This fires when another tab/session (e.g. employee portal) writes new data.
+  window.addEventListener('storage', e => {
+    if(e.key !== SK) return;
+    updateQueueBadge();
+    // If admin is currently viewing the queue page, re-render it live
+    if(SESSION && SESSION.role==='admin') {
+      const queuePage = byId('page-queue');
+      if(queuePage && queuePage.classList.contains('active')) {
+        renderQueue();
+      }
+    }
+    // Also refresh employee's own requests list if they are viewing it
+    if(SESSION && SESSION.role==='employee') {
+      const reqPage = byId('page-ep-requests');
+      if(reqPage && reqPage.classList.contains('active')) {
+        renderEpRequests();
+      }
+    }
+  });
+
+  // ── POLL FALLBACK: same-tab submissions (employee & admin in one tab) ──
+  // The storage event does NOT fire for same-tab writes, so we poll every 3s
+  // when the queue page is active to catch same-tab employee submissions.
+  let _lastQueueSnapshot = null;
+  setInterval(() => {
+    if(!SESSION || SESSION.role !== 'admin') return;
+    const queuePage = byId('page-queue');
+    if(!queuePage || !queuePage.classList.contains('active')) return;
+    const snapshot = (db().requests||[]).length + '|' + (db().deductions||[]).length + '|' + (db().pulseChecks||[]).filter(p=>!p.reviewed).length;
+    if(snapshot !== _lastQueueSnapshot) {
+      _lastQueueSnapshot = snapshot;
+      renderQueue();
+      updateQueueBadge();
+    }
+  }, 3000);
 
   // KB drag-drop
   const dropZone=byId('kb-drop-zone');
@@ -13864,31 +13841,22 @@ async function openNewAnnouncement(editId) {
 
   // Handle media
   let mediaData = existing?.mediaData||null, mediaName=existing?.mediaName||'', mediaType=existing?.mediaType||'';
-  let mediaUrl  = existing?.mediaUrl||null, mediaStorePath=existing?.mediaStorePath||null;
   const mediaFile = byId('ann-media-file')?.files?.[0];
   if(mediaFile) {
-    toast('Uploading media…','ok',3000);
-    try {
-      mediaStorePath = `announcements/${Date.now()}_${mediaFile.name}`;
-      mediaUrl  = await uploadToStorage(mediaStorePath, mediaFile);
-      mediaName = mediaFile.name;
-      mediaType = mediaFile.type;
-      mediaData = null; // no longer storing base64
-    } catch(err) {
-      toast('Media upload failed. Try again.','err'); return;
-    }
+    mediaData = await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(mediaFile);});
+    mediaName = mediaFile.name; mediaType = mediaFile.type;
   }
 
   const d2 = db();
   if(!d2.announcements) d2.announcements=[];
   if(editId) {
     const idx = d2.announcements.findIndex(a=>a.id===editId);
-    if(idx>-1) d2.announcements[idx] = {...d2.announcements[idx], title,body,category:cat,priority:prio,expiresAt:expires,targetType:tType,targetEmps:tEmps,mediaUrl,mediaStorePath,mediaName,mediaType,editedAt:new Date().toISOString(),editedBy:SESSION?.name||'Admin'};
+    if(idx>-1) d2.announcements[idx] = {...d2.announcements[idx], title,body,category:cat,priority:prio,expiresAt:expires,targetType:tType,targetEmps:tEmps,mediaData,mediaName,mediaType,editedAt:new Date().toISOString(),editedBy:SESSION?.name||'Admin'};
   } else {
     d2.announcements.unshift({
       id:'ANN'+Date.now(), title, body, category:cat, priority:prio,
       expiresAt:expires, targetType:tType, targetEmps:tEmps,
-      mediaUrl, mediaStorePath, mediaName, mediaType,
+      mediaData, mediaName, mediaType,
       createdAt:new Date().toISOString(), createdBy:SESSION?.name||'Admin',
       acks:[]
     });
@@ -13967,12 +13935,12 @@ function renderAnnouncements() {
       : (a.targetEmps||[]).length;
     const ackedCount = (a.acks||[]).length;
     const pct = totalRecip>0 ? Math.round(ackedCount/totalRecip*100) : 0;
-    const mediaHTML = (a.mediaUrl||a.mediaData)
+    const mediaHTML = a.mediaData
       ? a.mediaType?.startsWith('image/')
-        ? `<img src="${a.mediaUrl||a.mediaData}" style="max-height:120px;border-radius:8px;margin-top:8px">`
+        ? `<img src="${a.mediaData}" style="max-height:120px;border-radius:8px;margin-top:8px">`
         : a.mediaType?.startsWith('video/')
-          ? `<video src="${a.mediaUrl||a.mediaData}" controls style="max-height:100px;border-radius:8px;margin-top:8px"></video>`
-          : `<a href="${a.mediaUrl||a.mediaData}" download="${a.mediaName}" style="font-size:11px;color:var(--blue)">📎 ${a.mediaName}</a>`
+          ? `<video src="${a.mediaData}" controls style="max-height:100px;border-radius:8px;margin-top:8px"></video>`
+          : `<a href="${a.mediaData}" download="${a.mediaName}" style="font-size:11px;color:var(--blue)">📎 ${a.mediaName}</a>`
       : '';
     return `<div style="border-radius:12px;border:1px solid ${p.border};margin-bottom:8px;opacity:${expired?0.6:1};overflow:hidden">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:${p.bg};cursor:pointer;user-select:none" onclick="(function(){var b=document.getElementById('ann-body-${ai}'),c=document.getElementById('ann-caret-${ai}');if(b){b.style.display=b.style.display==='none'?'':'none';c.textContent=b.style.display===''?'▲':'▼';}})()">
@@ -14066,12 +14034,12 @@ function renderEpAnnouncements() {
   list.innerHTML = anns.map((a,ai)=>{
     const p = ANN_PRIORITY[a.priority]||ANN_PRIORITY.normal;
     const acked = (a.acks||[]).some(x=>x.empId===myId);
-    const mediaHTML = (a.mediaUrl||a.mediaData)
+    const mediaHTML = a.mediaData
       ? a.mediaType?.startsWith('image/')
-        ? `<img src="${a.mediaUrl||a.mediaData}" style="max-width:100%;max-height:200px;border-radius:8px;margin-top:10px">`
+        ? `<img src="${a.mediaData}" style="max-width:100%;max-height:200px;border-radius:8px;margin-top:10px">`
         : a.mediaType?.startsWith('video/')
-          ? `<video src="${a.mediaUrl||a.mediaData}" controls style="max-width:100%;max-height:160px;border-radius:8px;margin-top:10px"></video>`
-          : `<a href="${a.mediaUrl||a.mediaData}" download="${a.mediaName}" class="btn btn-ghost btn-sm" style="margin-top:8px">📎 Download ${a.mediaName}</a>`
+          ? `<video src="${a.mediaData}" controls style="max-width:100%;max-height:160px;border-radius:8px;margin-top:10px"></video>`
+          : `<a href="${a.mediaData}" download="${a.mediaName}" class="btn btn-ghost btn-sm" style="margin-top:8px">📎 Download ${a.mediaName}</a>`
       : '';
     const bodyId  = `ep-ann-card-body-${ai}`;
     const caretId = `ep-ann-caret-${ai}`;
@@ -14123,12 +14091,12 @@ function openAnnouncementModal(annId) {
   const p = ANN_PRIORITY[a.priority]||ANN_PRIORITY.normal;
   const acked = (a.acks||[]).some(x=>x.empId===myId);
   const myAck = (a.acks||[]).find(x=>x.empId===myId);
-  const mediaHTML = (a.mediaUrl||a.mediaData)
+  const mediaHTML = a.mediaData
     ? a.mediaType?.startsWith('image/')
-      ? `<img src="${a.mediaUrl||a.mediaData}" style="max-width:100%;max-height:260px;border-radius:10px;margin-top:12px;display:block">`
+      ? `<img src="${a.mediaData}" style="max-width:100%;max-height:260px;border-radius:10px;margin-top:12px;display:block">`
       : a.mediaType?.startsWith('video/')
-        ? `<video src="${a.mediaUrl||a.mediaData}" controls style="max-width:100%;max-height:200px;border-radius:10px;margin-top:12px"></video>`
-        : `<a href="${a.mediaUrl||a.mediaData}" download="${a.mediaName}" class="btn btn-ghost btn-sm" style="margin-top:10px;display:inline-flex">📎 Download ${a.mediaName}</a>`
+        ? `<video src="${a.mediaData}" controls style="max-width:100%;max-height:200px;border-radius:10px;margin-top:12px"></video>`
+        : `<a href="${a.mediaData}" download="${a.mediaName}" class="btn btn-ghost btn-sm" style="margin-top:10px;display:inline-flex">📎 Download ${a.mediaName}</a>`
     : '';
 
   const existing = byId('ann-view-overlay');
@@ -14759,14 +14727,14 @@ function finishSignOut() {
 // ══════════════════════════════════════════════════
 //  EMPLOYEE VIEW TOGGLE (card / list / compact)
 // ══════════════════════════════════════════════════
-let _empView = 'card';
+let _empView = 'compact';
 function setEmpView(mode) {
   _empView = mode;
   const grid = byId('emp-grid');
   if(!grid) return;
-  grid.className = mode==='list' ? 'emp-grid view-list' : mode==='compact' ? 'emp-grid view-compact' : 'emp-grid';
+  grid.className = mode==='list' ? 'emp-grid view-list' : mode==='compact' ? 'emp-grid view-compact' : mode==='photo' ? 'emp-grid view-photo' : 'emp-grid';
   // Highlight active button
-  ['card','list','compact'].forEach(m=>{
+  ['card','list','compact','photo'].forEach(m=>{
     const btn = byId('emp-view-'+m);
     if(btn){ btn.style.background=m===mode?'var(--accent)':'transparent'; btn.style.color=m===mode?'#fff':'var(--text3)'; }
   });
@@ -15245,7 +15213,7 @@ function mreStep2Next() {
   _mreSetDots(3);
 }
 
-async function mreExecute() {
+function mreExecute() {
   // Disable buttons to prevent double-click
   byId('mre-execute-btn').disabled = true;
   byId('mre-cancel-final').disabled = true;
@@ -15264,7 +15232,7 @@ async function mreExecute() {
   }, 1000);
 }
 
-async function _doMasterReset() {
+function _doMasterReset() {
   try {
     const d = db();
     const ts = new Date().toISOString();
@@ -15303,9 +15271,8 @@ async function _doMasterReset() {
       archiveWarning = ' (storage full — backup skipped)';
     }
 
-    // Step 3: Wipe live data from Firestore
-    _DB_CACHE = null;
-    await DOC_REF.delete().catch(()=>{});
+    // Step 3: Wipe live data
+    localStorage.removeItem(SK);
 
     // Step 4: Restore admin credentials into fresh seed
     const fresh = seed();
